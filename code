@@ -1,1 +1,1029 @@
 
+---
+format:
+  html:
+    toc: false
+    embed-resources: false
+    theme: flatly
+    fig-width: 10
+    fig-height: 5.5
+    
+execute:
+  echo: false
+  warning: false
+  message: false
+  
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(tidyverse)
+library(broom)
+library(gt)
+library(maps)
+library(scales)
+
+# Import Data and Transform
+raw <- read.csv("C:/Users/MY PC/Desktop/dataset/sea_level_anomalies.csv")
+
+sea_level_clean <- raw |>
+  select(
+    country_code        = GEO_PICT,
+    country             = Pacific.Island.Countries.and.territories,
+    year                = TIME_PERIOD,
+    sea_level_anomaly_m = OBS_VALUE
+  )
+
+subregion_map <- tribble(
+  ~country,                          ~subregion,
+  "Papua New Guinea",                "Melanesia",
+  "Solomon Islands",                 "Melanesia",
+  "Vanuatu",                         "Melanesia",
+  "Fiji",                            "Melanesia",
+  "New Caledonia",                   "Melanesia",
+  "Samoa",                           "Polynesia",
+  "American Samoa",                  "Polynesia",
+  "Tonga",                           "Polynesia",
+  "Tuvalu",                          "Polynesia",
+  "Niue",                            "Polynesia",
+  "Cook Islands",                    "Polynesia",
+  "Tokelau",                         "Polynesia",
+  "Wallis and Futuna",               "Polynesia",
+  "French Polynesia",                "Polynesia",
+  "Kiribati",                        "Micronesia",
+  "Marshall Islands",                "Micronesia",
+  "Micronesia, Federated State of",  "Micronesia",
+  "Nauru",                           "Micronesia",
+  "Palau",                           "Micronesia",
+  "Guam",                            "Micronesia",
+  "Northern Mariana Islands",        "Micronesia"
+)
+
+sea_level_sub <- sea_level_clean |>
+  left_join(subregion_map, by = "country")
+
+country_coords <- tribble(
+  ~country,                          ~lat,    ~lon,
+  "Papua New Guinea",                -6.3,   147.1,
+  "Solomon Islands",                 -9.6,   160.2,
+  "Vanuatu",                        -15.4,   166.9,
+  "Fiji",                           -17.7,   178.1,
+  "New Caledonia",                  -20.9,   165.6,
+  "Samoa",                          -13.8,  -172.1,
+  "American Samoa",                 -14.3,  -170.7,
+  "Tonga",                          -21.2,  -175.2,
+  "Tuvalu",                          -7.5,   178.7,
+  "Niue",                           -19.1,  -169.9,
+  "Cook Islands",                   -21.2,  -159.8,
+  "Tokelau",                         -9.2,  -171.8,
+  "Wallis and Futuna",              -13.8,  -177.2,
+  "French Polynesia",               -17.7,  -149.4,
+  "Kiribati",                         1.9,   157.4,
+  "Marshall Islands",                 7.1,   171.2,
+  "Micronesia, Federated State of",   6.9,   158.2,
+  "Nauru",                           -0.5,   166.9,
+  "Palau",                            7.5,   134.6,
+  "Guam",                            13.4,   144.8,
+  "Northern Mariana Islands",        15.1,   145.7
+)
+
+oni_annual <- tryCatch(
+  read.table(
+    "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt",
+    header = TRUE
+  ) |>
+    as_tibble() |>
+    rename(year = YR, oni = ANOM) |>
+    summarise(oni_mean = mean(oni), .by = year) |>
+    filter(year >= 1993, year <= 2023),
+  error = function(e) NULL
+)
+
+sea_oni <- sea_level_sub |>
+  left_join(oni_annual, by = "year")
+
+trend_ci <- sea_level_clean |>
+  nest_by(country) |>
+  mutate(model = list(lm(sea_level_anomaly_m ~ year, data = data))) |>
+  reframe(tidy(model, conf.int = TRUE, conf.level = 0.95)) |>
+  filter(term == "year") |>
+  select(country, slope = estimate, conf.low, conf.high, p_value = p.value) |>
+  left_join(subregion_map, by = "country") |>
+  arrange(desc(slope))
+
+el_nino_years <- c(1997, 1998, 2002, 2003, 2004, 2006, 2009, 2010,
+                   2014, 2015, 2016, 2018, 2019, 2023)
+
+wilcox_p <- wilcox.test(
+  sea_level_anomaly_m ~ if_else(year %in% el_nino_years, "El Nino", "Neutral"),
+  data = sea_oni
+)$p.value
+
+# Additional datasets
+temp_raw <- read.csv("C:/Users/MY PC/Desktop/dataset/surface_temp_anomalies.csv")
+
+surf_temp <- temp_raw |>
+  filter(CLIMATE_CHANGE_INDICATORS == "ST_ANOM") |>
+  select(country = Pacific.Island.Countries.and.territories,
+         year = TIME_PERIOD, st_anom = OBS_VALUE) |>
+  filter(!is.na(st_anom)) |>
+  left_join(subregion_map, by = "country")
+
+sst_anom <- temp_raw |>
+  filter(CLIMATE_CHANGE_INDICATORS == "SST_ANOM") |>
+  select(country = Pacific.Island.Countries.and.territories,
+         year = TIME_PERIOD, sst_anom = OBS_VALUE) |>
+  filter(!is.na(sst_anom)) |>
+  left_join(subregion_map, by = "country")
+
+
+temp_raw1 <- read.csv("C:/Users/MY PC/Desktop/dataset/sea_surface_temperature_anomalies.csv")
+sea_surf_temp <- temp_raw1 |>
+  filter(CLIMATE_CHANGE_INDICATORS == "ST_ANOM") |>
+  select(country = Pacific.Island.Countries.and.territories,
+         year = TIME_PERIOD, st_anom1 = OBS_VALUE) |>
+  filter(!is.na(st_anom1)) |>
+  left_join(subregion_map, by = "country")
+
+sst_anom1 <- temp_raw1 |>
+  filter(CLIMATE_CHANGE_INDICATORS == "SST_ANOM") |>
+  select(country = Pacific.Island.Countries.and.territories,
+         year = TIME_PERIOD, sst_anom1 = OBS_VALUE) |>
+  filter(!is.na(sst_anom1)) |>
+  left_join(subregion_map, by = "country")
+
+
+econ_loss <- read.csv(
+  "C:/Users/MY PC/Desktop/dataset/direct_disaster_economic_loss.csv"
+) |>
+  select(country = Pacific.Island.Countries.and.territories,
+         year = TIME_PERIOD, loss_usd = OBS_VALUE) |>
+  filter(!is.na(loss_usd)) |>
+  left_join(subregion_map, by = "country")
+
+persons_aff <- read.csv(
+  "C:/Users/MY PC/Desktop/dataset/number_of_persons_directly_affected_by_disaster.csv"
+) |>
+  select(country = Pacific.Island.Countries.and.territories,
+         year = TIME_PERIOD, persons = OBS_VALUE) |>
+  filter(!is.na(persons)) |>
+  left_join(subregion_map, by = "country")
+
+total_loss_bn   <- round(sum(econ_loss$loss_usd,  na.rm = TRUE) / 1e9, 1)
+total_persons_m <- round(sum(persons_aff$persons, na.rm = TRUE) / 1e6, 2)
+
+# Key PNG figures 
+png_slope    <- round(trend_ci$slope[trend_ci$country == "Papua New Guinea"] * 1000, 1)
+png_ci_low   <- round(trend_ci$conf.low[trend_ci$country == "Papua New Guinea"] * 1000, 1)
+png_ci_high  <- round(trend_ci$conf.high[trend_ci$country == "Papua New Guinea"] * 1000, 1)
+n_nations    <- n_distinct(sea_level_clean$country)
+year_min     <- min(sea_level_clean$year)
+year_max     <- max(sea_level_clean$year)
+
+# Colours 
+col_ocean   <- "#1a5276"
+col_teal    <- "#1abc9c"
+col_coral   <- "#e74c3c"
+col_subgrid <- "#eaf4fb"
+col_mel     <- "#1a5276"
+col_mic     <- "#1abc9c"
+col_pol     <- "#f39c12"
+subregion_colours <- c(
+  "Melanesia"  = col_mel,
+  "Micronesia" = col_mic,
+  "Polynesia"  = col_pol
+)
+
+#Base theme 
+theme_essay <- function(base_size = 12) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.background  = element_rect(fill = "white", color = NA),
+      panel.background = element_rect(fill = col_subgrid, color = NA),
+      panel.grid.major = element_line(color = "#d5e8f3", linewidth = 0.5),
+      panel.grid.minor = element_blank(),
+      plot.title       = element_text(face = "bold", size = 14,
+                                      color = "#0a2342", margin = margin(b = 6)),
+      plot.subtitle    = element_text(size = 11, color = "#4a6274",
+                                      margin = margin(b = 14)),
+      plot.caption     = element_text(color = "#8d9db6", size = 8,
+                                      hjust = 0, margin = margin(t = 10)),
+      axis.text        = element_text(color = "#4a5568"),
+      axis.title       = element_text(color = "#4a5568", size = 10),
+      legend.position  = "bottom",
+      legend.title     = element_text(size = 10),
+      strip.text       = element_text(face = "bold", color = col_ocean)
+    )
+}
+```
+
+```{=html}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600&display=swap');
+
+body { font-family: 'Inter', sans-serif; color: #1c2833;
+       line-height: 1.78; font-size: 1.05rem; }
+h1, h2, h3 { font-family: 'Playfair Display', serif; }
+
+.hero {
+  background: linear-gradient(145deg, #0a2342 0%, #1a5276 55%, #1abc9c 100%);
+  color: white; padding: 5.5rem 3rem 4.5rem;
+  margin: -1.5rem -3rem 3.5rem; text-align: center;
+  position: relative; overflow: hidden;
+}
+.hero::after {
+  content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
+  height: 60px; background: white;
+  clip-path: ellipse(55% 100% at 50% 100%);
+}
+.hero-title {
+  font-family: 'Playfair Display', serif; font-size: 3.4rem;
+  font-weight: 900; margin: 0 0 0.5rem; line-height: 1.1;
+  text-shadow: 0 2px 16px rgba(0,0,0,0.3);
+}
+.hero-subtitle { font-size: 1.15rem; opacity: 0.88;
+                 margin: 0 auto 1.5rem; max-width: 640px; }
+.hero-byline { font-size: 0.88rem; opacity: 0.65;
+               letter-spacing: 0.08em; text-transform: uppercase; }
+
+.section-label { color: #1abc9c; font-size: 0.78rem; font-weight: 700;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  margin-bottom: 0.4rem; display: block; }
+h2 { font-size: 2.1rem; color: #0a2342; margin-top: 3rem; margin-bottom: 0.5rem; }
+h3 { font-size: 1.3rem; color: #1a5276; }
+
+.pull-quote {
+  border-left: 5px solid #1abc9c; background: #f0fbf8;
+  padding: 1.4rem 2rem; margin: 2.2rem 0; font-size: 1.22rem;
+  font-style: italic; color: #0a2342; border-radius: 0 8px 8px 0;
+}
+.stats-row { display: flex; gap: 1.5rem; margin: 2.5rem 0; flex-wrap: wrap; }
+.stat-box {
+  flex: 1; min-width: 150px;
+  background: linear-gradient(135deg, #0a2342, #1a5276);
+  color: white; border-radius: 12px; padding: 2rem 1.5rem; text-align: center;
+}
+.stat-number { font-family: 'Playfair Display', serif; font-size: 3.4rem;
+               font-weight: 900; line-height: 1; color: #1abc9c; }
+.stat-label  { font-size: 0.88rem; margin-top: 0.6rem;
+               opacity: 0.85; line-height: 1.4; }
+.finding-card {
+  border-left: 4px solid #1a5276; padding: 0.9rem 1.5rem;
+  margin: 1rem 0; background: #f4f8fc; border-radius: 0 8px 8px 0;
+}
+.finding-card strong { color: #0a2342; }
+.enso-note {
+  background: #fdf2f0; border-left: 5px solid #e74c3c;
+  padding: 1.2rem 1.8rem; margin: 1.5rem 0;
+  border-radius: 0 8px 8px 0; color: #6e2117;
+}
+.justice-block {
+  background: linear-gradient(135deg, #0a2342 0%, #1a5276 100%);
+  color: white; padding: 3.5rem 3rem; border-radius: 16px; margin: 3rem 0;
+  text-align: center;
+}
+.justice-block h2 { color: #1abc9c; font-size: 2.3rem; margin-top: 0; }
+.justice-block p { font-size: 1.15rem; opacity: 0.92; max-width: 680px;
+                   margin: 0 auto; line-height: 1.85; }
+.wave-divider { text-align: center; color: #1abc9c; font-size: 1.8rem;
+                margin: 3rem 0; letter-spacing: 0.4em; opacity: 0.55; }
+.chart-note { font-size: 0.82rem; color: #8d9db6;
+              margin-top: -0.5rem; margin-bottom: 1.5rem; }
+.report-footer { margin-top: 4rem; padding-top: 1.5rem;
+  border-top: 2px solid #d5e8f3; font-size: 0.82rem;
+  color: #8d9db6; line-height: 1.7; }
+</style>
+```
+
+```{=html}
+<div class="hero">
+<p class="hero-byline">Pacific Dataviz Challenge 2026 &nbsp;·&nbsp; Climate Change Theme</p>
+  <div class="hero-title">Papua New Guinea's Coast Is Being Lost to the Sea</div>
+  <p class="hero-subtitle">Of all 21 Pacific Island nations, PNG records the fastest rate of sea level rise — and the trend shows no sign of slowing</p>
+</div>
+```
+
+The SPC Pacific Data Hub tracks sea level measurements across `{r} n_nations` Pacific Island nations and territories dating back to `{r} year_min`. One finding stands out: Papua New Guinea sits at the top of every ranked chart in this dataset. Its sea levels are rising at **`{r} png_slope` mm per year** — faster than any other Pacific nation on record. This report examines that finding: what the data shows, how PNG compares across the Pacific, and what it means alongside warming temperatures and growing disaster costs.
+
+
+## PNG leads a ranking no nation wants to top
+
+<span class="section-label">The key finding</span>
+
+A linear trend model fitted to each country's `{r} year_max - year_min`-year record places PNG at the head of the table. The estimate of `{r} png_slope` mm/yr (95% CI: `{r} png_ci_low`–`{r} png_ci_high` mm/yr) is statistically significant and sits clear of the next-fastest nations.
+
+```{r}
+#| label: ranked-trends-plot
+#| fig-height: 6.5
+
+ggplot(trend_ci,
+       aes(x = slope * 1000,
+           y = reorder(country, slope),
+           color = subregion)) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             color = "#cc0000", linewidth = 0.5) +
+  geom_errorbar(aes(xmin = conf.low * 1000, xmax = conf.high * 1000),
+                width = 0.4, linewidth = 0.5, alpha = 0.5) +
+  geom_point(aes(shape = country == "Papua New Guinea"),
+             size = 3) +
+  scale_color_manual(values = subregion_colours) +
+  scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 18),
+                     guide = "none") +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.06))) +
+  labs(
+    title    = "Rate of sea level rise per country (1993–2023)",
+    subtitle = "mm/yr · Point = OLS estimate · Bars = 95% CI · Diamond = Papua New Guinea",
+    x = "Trend (mm per year)", y = NULL, color = "Subregion",
+    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators"
+  ) +
+  theme_essay() +
+  theme(
+    legend.position = c(0.82, 0.15),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+```
+
+
+Every confidence interval in this chart lies entirely above zero. No country shows a flat or declining trend — the rise is universal. But PNG's rate is the highest, and it matters: a nation rising at `{r} png_slope` mm/yr faces a meaningfully different trajectory from one rising at 3.2 mm/yr (Tokelau, at the bottom of this chart).
+
+::: {.pull-quote}
+PNG has `{r} round((png_slope / min(trend_ci$slope * 1000)) * 100 - 100, 0)`% faster sea level rise than the slowest Pacific nation in this dataset. With roughly 9 million people and thousands of kilometres of coastline, that differential has direct implications for coastal infrastructure, agriculture, and communities.
+:::
+
+
+## PNG is not alone — but it leads
+
+<span class="section-label">The Pacific-wide picture</span>
+
+PNG's position at the top does not mean the rest of the Pacific is safe. All `{r} n_nations` nations show the same upward direction over the full period. The chart below shows every country's trajectory, with PNG highlighted.
+
+```{r}
+#| label: spaghetti-trends-smooth
+#| fig-height: 5
+
+df_spag <- sea_level_clean |>
+  mutate(
+    is_png = country == "Papua New Guinea",
+    highlight = if_else(is_png, "Papua New Guinea", "Other nations")
+  )
+
+# Generate smooth predictions per country using loess
+df_smooth <- df_spag |>
+  group_by(country, is_png, highlight) |>
+  do({
+    mod <- loess(sea_level_anomaly_m ~ year, data = ., span = 0.4)
+    data.frame(
+      year = seq(1993, 2023, length.out = 50),
+      smooth = predict(mod, newdata = data.frame(year = seq(1993, 2023, length.out = 50)))
+    )
+  }) |>
+  ungroup()
+
+# Get all country data for points (highlight PNG separately)
+point_data <- df_spag |>
+  mutate(
+    point_color = if_else(is_png, col_ocean, "#9fc5d8"),
+    point_size = if_else(is_png, 2.5, 0.8),
+    point_alpha = if_else(is_png, 0.9, 0.3)
+  )
+
+# Define colours for smoothed lines: PNG in ocean blue, others in muted teal
+highlight_colours <- c(
+  "Papua New Guinea" = col_ocean,
+  "Other nations" = "#9fc5d8"
+)
+
+ggplot() +
+  # All smoothed lines (including PNG)
+  geom_line(
+    data = df_smooth,
+    aes(x = year, y = smooth, group = country, colour = highlight),
+    linewidth = 0.5, alpha = 0.6
+  ) +
+  # All data points (PNG bold, others faint)
+  geom_point(
+    data = point_data,
+    aes(x = year, y = sea_level_anomaly_m),
+    color = point_data$point_color,
+    size = point_data$point_size,
+    alpha = point_data$point_alpha
+  ) +
+  # Reference line at zero
+  geom_hline(yintercept = 0, linetype = "dotted",
+             color = "#aac4d4", linewidth = 0.4) +
+  # PNG annotation
+  annotate("text", x = 2019, y = 0.185,
+           label = "Papua New Guinea\n(fastest rising)",
+           color = col_ocean, fontface = "bold",
+           size = 3.2, hjust = 0, lineheight = 0.9) +
+  annotate("text", x = 2020, y = -0.04,
+           label = "All other nations",
+           color = "#6ba3c0", size = 2.8, hjust = 0) +
+  # Axes
+  scale_x_continuous(breaks = seq(1993, 2023, by = 5),
+                     limits = c(1993, 2026)) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.10))) +
+  scale_colour_manual(
+    values = highlight_colours,
+    name = NULL
+  ) +
+  labs(
+    title    = "Sea level anomaly: all 21 Pacific Island nations, 1993–2023",
+    subtitle = "All lines smoothed (loess) · PNG highlighted in blue · reference line = 1993 baseline",
+    x = NULL, y = "Sea level anomaly (m)",
+    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators"
+  ) +
+  theme_essay() +
+  theme(
+    legend.position = "bottom",
+    legend.key.size = unit(0.4, "cm"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+```
+
+The grey lines collectively confirm that PNG's trend is the steepest — but they also show that the trajectory is shared. Tuvalu, Kiribati, Marshall Islands, and every other Pacific nation are tracking in the same direction.
+
+```{=html}
+<div class="stats-row">
+  <div class="stat-box">
+    <div class="stat-number">21</div>
+    <div class="stat-label">Pacific nations — all with rising seas</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-number">`r png_slope`mm</div>
+    <div class="stat-label">PNG's annual rate of sea level rise</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-number">30</div>
+    <div class="stat-label">years of unbroken upward record</div>
+  </div>
+</div>
+```
+
+PNG also sits geographically at the western edge of the Pacific, where sea levels are most directly influenced by the Walker Circulation and western Pacific warm pool dynamics — factors that may partly explain its elevated rate compared to the central and eastern Pacific nations.
+
+
+```{r}
+#| label: pacific-map
+#| fig-height: 5
+
+map_data_plot <- trend_ci |>
+  left_join(country_coords, by = "country") |>
+  mutate(
+    rate_mm  = round(slope * 1000, 2),
+    # Shift negative longitudes to >180 for Pacific-centred view
+    lon_plot = if_else(lon < 0, lon + 360, lon)
+  )
+
+# Pacific-centred world polygons
+world_pacific <- map_data("world") |>
+  mutate(long = if_else(long < -30, long + 360, long)) |>
+  filter(between(long, 115, 295), between(lat, -42, 32))
+
+ggplot() +
+  geom_polygon(data = world_pacific,
+               aes(x = long, y = lat, group = group),
+               fill = "#d4e6f1", color = "#7fb3d3", linewidth = 0.2) +
+  geom_point(data = map_data_plot,
+             aes(x = lon_plot, y = lat,
+                 size = rate_mm, color = subregion),
+             alpha = 0.85) +
+  geom_text(data = map_data_plot |> filter(country %in% c(
+    "Papua New Guinea", "Fiji", "Tuvalu", "Kiribati", "Palau"
+  )),
+  aes(x = lon_plot, y = lat + 2.8, label = country),
+  size = 2.6, color = "#0a2342", fontface = "bold") +
+  scale_color_manual(values = subregion_colours) +
+  scale_size_continuous(range = c(3, 12),
+                        name = "Rise rate (mm/yr)") +
+  coord_fixed(xlim = c(115, 295), ylim = c(-42, 32)) +
+  labs(
+    title    = "Pacific Island sea level rise rates (1993–2023)",
+    subtitle = "Bubble size = annual rise rate (mm/yr) · Colour = subregion",
+    color    = "Subregion", x = NULL, y = NULL
+  ) +
+  theme_essay() +
+  theme(
+    axis.text  = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    legend.position  = "bottom"
+  )
+```
+
+<p class="chart-note">Source: SPC Pacific Data Hub · Map: Pacific-centred projection</p>
+
+
+## Subregion comparison
+
+<span class="section-label">Where Melanesia stands</span>
+
+PNG belongs to Melanesia, which as a subregion records the highest mean rate of rise. The table below compares all three subregions.
+
+```{r}
+#| label: subregion-rate-table
+subregion_trend <- sea_level_sub |>
+  nest_by(subregion) |>
+  mutate(model = list(lm(sea_level_anomaly_m ~ year, data = data))) |>
+  reframe(tidy(model, conf.int = TRUE)) |>
+  filter(term == "year") |>
+  select(subregion, slope = estimate, conf.low, conf.high)
+
+subregion_trend |>
+  mutate(
+    rate = round(slope * 1000, 2),
+    ci   = paste0(round(conf.low * 1000, 2), " – ",
+                  round(conf.high * 1000, 2), " mm/yr")
+  ) |>
+  select(Subregion = subregion,
+         `Rise rate (mm/yr)` = rate,
+         `95% confidence interval` = ci) |>
+  gt() |>
+  tab_header(
+    title    = md("**Sea level rise by subregion**"),
+    subtitle = "All rates statistically significant at p < 0.001"
+  ) |>
+  tab_style(
+    style = list(cell_text(weight = "bold", color = "#0a2342"),
+                 cell_fill(color = "#eaf4fb")),
+    locations = cells_column_labels()
+  ) |>
+  tab_style(
+    style = cell_fill(color = "#f0fbf8"),
+    locations = cells_body(rows = Subregion == "Melanesia")
+  ) |>
+  cols_align(align = "center", columns = 2:3) |>
+  tab_options(table.width = pct(70), table.align = "left")
+```
+
+Melanesia's rate is marginally higher than Micronesia and Polynesia, but the confidence intervals overlap considerably. PNG's rate exceeds its own subregion's average — it is not simply carrying Melanesia up; it genuinely stands apart within the region.
+
+<div class="wave-divider">~ ~ ~</div>
+
+## Not even El Niño is holding the rise back
+
+<span class="section-label">The ENSO signal</span>
+
+A reasonable question when examining PNG's sea level record is whether natural climate variability — particularly the El Niño–Southern Oscillation — could explain the trend or offer any relief. The short answer is: less and less.
+
+During El Niño events, warm water migrates eastward and sea levels across the western Pacific tend to fall temporarily. PNG, sitting in the western warm pool, should be among the most affected by this suppression. But the data tells a more complicated story.
+
+```{r}
+#| label: dual-axis-enso-plot
+#| fig-height: 5
+
+if (!is.null(oni_annual)) {
+  pacific_mean <- sea_level_sub |>
+    summarise(mean_anomaly = mean(sea_level_anomaly_m), .by = year)
+
+  pacific_oni <- pacific_mean |>
+    left_join(oni_annual, by = "year") |>
+    filter(!is.na(oni_mean))
+
+  sl_range    <- range(pacific_oni$mean_anomaly)
+  oni_range_v <- range(pacific_oni$oni_mean)
+  sf          <- diff(sl_range) / diff(oni_range_v)
+  offs        <- sl_range[1] - oni_range_v[1] * sf
+
+  el_nino_rects <- tibble(
+    label = c("1997–98", "2009–10", "2015–16"),
+    xmin  = c(1996.5, 2008.5, 2014.5),
+    xmax  = c(1998.5, 2010.5, 2016.5)
+  )
+
+  ggplot(pacific_oni, aes(x = year)) +
+    geom_rect(data = el_nino_rects,
+              aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+              inherit.aes = FALSE,
+              fill = col_coral, alpha = 0.08) +
+    geom_text(data = el_nino_rects,
+              aes(x = (xmin + xmax) / 2,
+                  y = max(pacific_oni$mean_anomaly) * 0.96,
+                  label = label),
+              inherit.aes = FALSE,
+              color = "#922b21", size = 2.8, fontface = "bold") +
+    geom_hline(yintercept = 0, color = "#aac4d4",
+               linewidth = 0.3, linetype = "dotted") +
+    geom_line(aes(y = oni_mean * sf + offs),
+              color = col_coral, linewidth = 0.8,
+              linetype = "dashed", alpha = 0.75) +
+    geom_point(aes(y = oni_mean * sf + offs),
+               color = col_coral, size = 1.8, alpha = 0.7) +
+    geom_line(aes(y = mean_anomaly),
+              color = col_ocean, linewidth = 1.2) +
+    geom_point(aes(y = mean_anomaly),
+               color = col_ocean, size = 2.2) +
+    scale_y_continuous(
+      name = "Sea level anomaly (m)",
+      sec.axis = sec_axis(~ (. - offs) / sf,
+                          name = "Oceanic Niño Index (ONI)"),
+      expand = expansion(mult = c(0.05, 0.08))
+    ) +
+    scale_x_continuous(breaks = seq(1993, 2023, by = 3)) +
+    annotate("text", x = 1994, y = max(pacific_oni$mean_anomaly) * 0.80,
+             label = "Sea level (m)", color = col_ocean,
+             fontface = "bold", hjust = 0, size = 3.0) +
+    annotate("text", x = 1994, y = max(pacific_oni$mean_anomaly) * 0.63,
+             label = "ONI (dashed)", color = col_coral,
+             fontface = "bold", hjust = 0, size = 3.0) +
+    labs(
+      title   = "El Niño suppresses sea levels — but the trend keeps climbing",
+      subtitle = "Sea level (blue, left axis) vs. ONI (red dashed, right axis) · Shaded = major El Niño events",
+      x = NULL,
+      caption = "Sea level: SPC Pacific Data Hub · ONI: NOAA Climate Prediction Center"
+    ) +
+    theme_essay() +
+    theme(
+      axis.title.y.left  = element_text(color = col_ocean),
+      axis.text.y.left   = element_text(color = col_ocean),
+      axis.title.y.right = element_text(color = col_coral),
+      axis.text.y.right  = element_text(color = col_coral),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.background = element_blank(),
+      plot.background = element_blank()
+    )
+}
+```
+
+::: {.enso-note}
+**Comparing 1997–98 and 2015–16 is the key test.** Both El Niño events were of similar strength by ONI measures, yet the 2015–16 dip was noticeably shallower. The most likely explanation: the underlying long-term rise had grown large enough to partially offset the El Niño suppression. As the baseline keeps climbing, temporary dips will become progressively smaller relative to the trend.
+:::
+
+Sea level anomalies are also measurably lower during El Niño years on average (Wilcoxon test, p = `{r} round(wilcox_p, 3)`), confirming the suppression effect is real. But it is losing ground to the trend.
+
+
+```{r}
+#| label: oni-sensitivity-plot
+#| fig-height: 6
+
+oni_models <- sea_oni |>
+  nest_by(country) |>
+  mutate(
+    mod_trend     = list(lm(sea_level_anomaly_m ~ year, data = data)),
+    mod_trend_oni = list(lm(sea_level_anomaly_m ~ year + oni_mean, data = data))
+  ) |>
+  mutate(
+    r2_trend     = summary(mod_trend)$r.squared,
+    r2_trend_oni = summary(mod_trend_oni)$r.squared
+  )
+
+oni_coefs <- oni_models |>
+  reframe(tidy(mod_trend_oni, conf.int = TRUE)) |>
+  filter(term == "oni_mean") |>
+  select(country, oni_coef = estimate) |>
+  left_join(subregion_map, by = "country") |>
+  left_join(oni_models |> select(country, r2_trend, r2_trend_oni),
+            by = "country") |>
+  mutate(r2_gain = r2_trend_oni - r2_trend)
+
+ggplot(oni_coefs,
+       aes(x = r2_gain,
+           y = reorder(country, r2_gain),
+           fill = subregion)) +
+  geom_col(alpha = 0.75, width = 0.7) +
+  scale_fill_manual(values = subregion_colours) +
+  scale_x_continuous(
+    labels = label_percent(accuracy = 1),
+    expand = expansion(mult = c(0.01, 0.06))
+  ) +
+  labs(
+    title    = "ENSO sensitivity varies dramatically across the Pacific",
+    subtitle = "Additional R² gained by adding the ONI to a trend-only model",
+    x = "Increase in R² from adding ENSO (ONI)",
+    y = NULL, fill = "Subregion",
+    caption  = "ONI source: NOAA Climate Prediction Center"
+  ) +
+  theme_essay() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+```
+
+<p class="chart-note">PNG sits in the middle of this chart — its sea level record is influenced by ENSO, but the trend explains the bulk of its variance. Western Micronesian nations (Palau, Guam, FSM) show 40–50% additional variance explained by ONI; most Polynesian nations under 5%. For PNG, the long-term rise is the dominant signal.</p>
+
+<div class="wave-divider">~ ~ ~</div>
+
+## A warming ocean compounds the picture
+
+<span class="section-label">Surface and sea surface temperatures</span>
+
+Sea level rise is one dimension of climate change affecting PNG's coast. The same ocean is also warming. Surface temperature and sea surface temperature anomalies are trending upward across all three Pacific subregions — with Melanesia, PNG's subregion, showing a consistent positive signal.
+
+
+```{r}
+#| label: surface-temp-trend
+#| fig-height: 4.8
+
+surf_temp |>
+  filter(!is.na(subregion)) |>
+  summarise(mean_st = mean(st_anom, na.rm = TRUE),
+            .by = c(subregion, year)) |>
+  ggplot(aes(x = year, y = mean_st,
+             color = subregion, group = subregion)) +
+  geom_hline(yintercept = 0, linetype = "dotted",
+             color = "#aac4d4", linewidth = 0.4) +
+  geom_line(linewidth = 0.8, alpha = 0.85) +
+  geom_point(size = 1.8, alpha = 0.7) +
+  geom_smooth(aes(group = 1), method = "lm", se = TRUE,
+              color = col_coral, fill = col_coral,
+              alpha = 0.08, linewidth = 0.7, linetype = "dashed") +
+  scale_color_manual(values = subregion_colours) +
+  scale_x_continuous(
+    breaks = seq(min(surf_temp$year, na.rm = TRUE),
+                 max(surf_temp$year, na.rm = TRUE),
+                 by = 5)
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.08))) +
+  labs(
+    title    = "Mean surface temperature anomaly by subregion",
+    subtitle = "Positive values = above baseline · dashed line = overall warming trend",
+    x = NULL, y = "Temperature anomaly (°C)", color = "Subregion",
+    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators (ST_ANOM)"
+  ) +
+  theme_essay() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+```
+
+```{r}
+#| label: sst-trend1
+#| fig-height: 4.8
+
+sst_anom1 |>
+  filter(!is.na(subregion)) |>
+  summarise(mean_sst = mean(sst_anom1, na.rm = TRUE),  #Fixed column name
+            .by = c(subregion, year)) |>
+  ggplot(aes(x = year, y = mean_sst,  #se the new column name
+             color = subregion, group = subregion)) +
+  geom_hline(yintercept = 0, linetype = "dotted",
+             color = "#aac4d4", linewidth = 0.4) +
+  geom_line(linewidth = 0.8, alpha = 0.85) +
+  geom_point(size = 1.8, alpha = 0.7) +
+  geom_smooth(aes(group = 1), method = "lm", se = TRUE,
+              color = col_teal, fill = col_teal,
+              alpha = 0.08, linewidth = 0.7, linetype = "dashed") +
+  scale_color_manual(values = subregion_colours) +
+  scale_x_continuous(
+    breaks = seq(min(sst_anom1$year, na.rm = TRUE),
+                 max(sst_anom1$year, na.rm = TRUE),
+                 by = 5)
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.08))) +
+  labs(
+    title    = "Mean sea surface temperature (SST) anomaly by subregion",
+    subtitle = "Warmer oceans intensify storms and bleach coral reefs",
+    x = NULL, y = "SST anomaly (°C)", color = "Subregion",
+    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators (SST_ANOM)"
+  ) +
+  theme_essay() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+```
+
+
+Rising sea surface temperatures add further pressure: warmer water drives coral bleaching, reduces fish stocks, and intensifies tropical cyclones — all of which affect coastal communities directly. For PNG, where many coastal populations depend on reef fisheries for food security, the SST trend is not an abstract indicator.
+
+<div class="wave-divider">~ ~ ~</div>
+
+## The cost in people and dollars
+
+<span class="section-label">Disaster impacts</span>
+
+Climate change translates into economic losses and human displacement through disasters — cyclones, floods, and storm surges. Pacific Data Hub tracks both direct economic losses and the number of people directly affected.
+
+```{r}
+#| label: economic-loss
+#| fig-height: 4.5
+
+econ_loss |>
+  summarise(total_loss = sum(loss_usd, na.rm = TRUE), .by = year) |>
+  arrange(year) |>
+  ggplot(aes(x = year, y = total_loss / 1e6)) +
+  geom_col(fill = col_coral, alpha = 0.7, width = 0.7) +
+  geom_smooth(method = "loess", se = FALSE,
+              color = col_ocean, linewidth = 0.8,
+              linetype = "dashed", span = 0.5) +
+  scale_y_continuous(
+    labels = label_dollar(suffix = "M", prefix = "$"),
+    expand = expansion(mult = c(0.05, 0.10))
+  ) +
+  scale_x_continuous(
+    breaks = seq(min(econ_loss$year, na.rm = TRUE),
+                 max(econ_loss$year, na.rm = TRUE),
+                 by = 3)
+  ) +
+  labs(
+    title    = "Direct disaster economic losses across Pacific nations",
+    subtitle = paste0(
+      "Annual total · dashed = smoothed trend · cumulative total: $",
+      total_loss_bn, "B USD"
+    ),
+    x = NULL, y = "Economic loss (USD millions)",
+    caption  = "Source: SPC Pacific Data Hub — SDG 11.5.2 (Direct disaster economic loss)"
+  ) +
+  theme_essay() +
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+```
+
+
+```{r}
+#| label: persons-affected
+#| fig-height: 5.5
+
+persons_aff |>
+  summarise(total_persons = sum(persons, na.rm = TRUE),
+            .by = c(country, subregion)) |>
+  arrange(desc(total_persons)) |>
+  slice_head(n = 15) |>
+  ggplot(aes(x = total_persons / 1e3,
+             y = reorder(country, total_persons),
+             fill = subregion)) +
+  geom_col(alpha = 0.75, width = 0.7) +
+  scale_fill_manual(values = subregion_colours) +
+  scale_x_continuous(
+    labels = label_comma(suffix = "K"),
+    expand = expansion(mult = c(0.01, 0.08))
+  ) +
+  labs(
+    title    = "People directly affected by disasters (cumulative total)",
+    subtitle = paste0(
+      "Top 15 countries · region total: ",
+      total_persons_m, "M people across all records"
+    ),
+    x = "Total persons affected (thousands)",
+    y = NULL, fill = "Subregion",
+    caption  = "Source: SPC Pacific Data Hub — SDG 11.5.2 (Persons affected by disasters)"
+  ) +
+  theme_essay() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    plot.background = element_blank()
+  )
+```
+
+```{=html}
+<div class="stats-row">
+  <div class="stat-box">
+    <div class="stat-number">$`r total_loss_bn`B</div>
+    <div class="stat-label">total direct disaster economic losses (USD)</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-number">`r total_persons_m`M</div>
+    <div class="stat-label">people directly affected by climate disasters</div>
+  </div>
+</div>
+```
+
+<div class="wave-divider">~ ~ ~</div>
+
+```{=html}
+<div class="justice-block">
+  <h2>PNG's exposure, the Pacific's problem</h2>
+  <p>
+    Papua New Guinea accounts for less than <strong>0.01%</strong> of global
+    cumulative CO₂ emissions. The entire Pacific Islands region together contributes
+    under <strong>0.03%</strong>. Yet this dataset places PNG at the top of the sea
+    level rise table — fastest rate, longest coastline exposure, largest population at risk.
+    <br><br>
+    The gap between who caused this problem and who is bearing the steepest physical
+    consequences is visible in every chart in this report.
+  </p>
+</div>
+```
+
+
+## Summary of findings
+
+<span class="section-label">Key findings</span>
+
+This analysis draws on `{r} nrow(sea_level_clean)` annual observations from `{r} n_nations` Pacific Island nations spanning `{r} year_min`–`{r} year_max`, across four official SPC datasets.
+
+::: {.finding-card}
+**PNG has the highest rate of sea level rise in the dataset.** At `{r} png_slope` mm/yr (95% CI: `{r} png_ci_low`–`{r} png_ci_high` mm/yr), PNG leads all 21 nations. The confidence interval lies entirely above zero.
+:::
+
+::: {.finding-card}
+**The rise is universal across the Pacific.** All 21 nations show statistically significant positive trends. PNG is fastest, but no country is exempt.
+:::
+
+::: {.finding-card}
+**Melanesia has the highest subregional mean rate**, though confidence intervals across all three subregions overlap substantially. PNG's rate exceeds even Melanesia's average.
+:::
+
+::: {.finding-card}
+**El Niño events suppress sea levels but cannot reverse the trend.** Sea levels are measurably lower in El Niño years (Wilcoxon p = `{r} round(wilcox_p, 3)`). However, the 2015–16 dip was shallower than 1997–98 despite comparable El Niño strength — consistent with the long-term rise progressively offsetting the suppression.
+:::
+
+::: {.finding-card}
+**PNG's ENSO sensitivity is moderate.** Adding ONI to the trend model explains some additional variance in PNG, but far less than in western Micronesia (40–50%). The trend, not ENSO, dominates PNG's sea level record.
+:::
+
+::: {.finding-card}
+**Surface and sea surface temperatures are also trending upward** across all subregions, adding pressure on coral reefs and fisheries alongside the sea level signal.
+:::
+
+::: {.finding-card}
+**Cumulative disaster losses reach $`{r} total_loss_bn`B USD**, with `{r} total_persons_m`M people directly affected across Pacific nations — the real-world cost of the trends above.
+:::
+
+::: {.pull-quote}
+Across every dataset examined here, Papua New Guinea's position is consistent: highest rate, Melanesia's largest nation, and among the Pacific's most exposed coastlines. The trajectory is clear. What happens next depends on decisions being made far from PNG's shores.
+:::
+
+```{=html}
+<div class="report-footer">
+  <strong>Five Official SPC Data Sources</strong><br>
+
+  Sea level anomalies (SEA_LVL):
+  <a href="https://stats.pacificdata.org/vis?lc=en&df[ds]=SPC2&df[id]=DF_CLIMATE_CHANGE&df[ag]=SPC&df[vs]=1.0&av=true&dq=A.SEA_LVL.&pd=,&to[TIME_PERIOD]=false" target="_blank">
+  SPC Pacific Data Hub – Climate Change Indicators
+  </a> (1993–2023).<br>
+
+  Surface temperature anomalies (ST_ANOM):
+  <a href="https://stats.pacificdata.org/vis?lc=en&df[ds]=SPC2&df[id]=DF_CLIMATE_CHANGE&df[ag]=SPC&df[vs]=1.0&av=true&dq=A.ST_ANOM.&pd=,&to[TIME_PERIOD]=false" target="_blank">
+  SPC Pacific Data Hub – Climate Change Indicators
+  </a>.<br>
+  
+  Sea Surface temperature anomalies (SST_ANOM):
+  <a href="https://stats.pacificdata.org/vis?lc=en&df[ds]=SPC2&df[id]=DF_CLIMATE_CHANGE&df[ag]=SPC&df[vs]=1.0&av=true&dq=A.SST_ANOM.&pd=,&to[TIME_PERIOD]=false" target="_blank">
+  SPC Pacific Data Hub – Climate Change Indicators
+  </a>.<br>
+
+
+
+
+  Direct disaster economic loss (VC_DSR_AALT):
+  <a href="https://stats.pacificdata.org/vis?lc=en&df[ds]=ds%3ASPC2&df[id]=DF_SDG_11&df[ag]=SPC&df[vs]=3.0&dq=A.VC_DSR_AALT...._T.....&pd=,&to[TIME_PERIOD]=false" target="_blank">
+  SPC Pacific Data Hub – SDG 11.5.2
+  </a>.<br>
+
+  Persons directly affected by disasters (VC_DSR_AFFCT):
+  <a href="https://stats.pacificdata.org/vis?lc=en&df[ds]=ds%3ASPC2&df[id]=DF_SDG_11&df[ag]=SPC&df[vs]=3.0&dq=A.VC_DSR_AFFCT.........&pd=,&to[TIME_PERIOD]=false&lb=bt" target="_blank">
+  SPC Pacific Data Hub – SDG 11.5.2
+  </a>.<br>
+
+  Oceanic Niño Index (ONI):
+  <a href="https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt" target="_blank">
+  NOAA Climate Prediction Center
+  </a>, accessed July 2026.<br><br>
+
+  <strong>Methods</strong><br>
+  Sea level trends were estimated using ordinary least squares (OLS) linear regression for each country and subregion.
+  Annual mean Oceanic Niño Index (ONI) values were included as a continuous predictor to examine the influence of ENSO on sea level variability.
+  Differences between El Niño and neutral conditions were assessed using the Wilcoxon rank-sum test.
+  Data processing, statistical analyses, and visualisations were completed in <strong>R 4.5</strong> using the tidyverse, broom, maps, scales, and gt packages.<br><br>
+
+ <strong>Pacific Dataviz Challenge 2026: Static Entry</strong><br>
+  This project is designed by
+  <a href="https://www.linkedin.com/in/keison-tipiou-7a817a6a/"
+     target="_blank"
+     rel="noopener noreferrer">
+    Keison Tipiou
+  </a> and its Quarto source can be 
+
+  <a href="https://github.com/Keison542/pacific-static-dataviz-2026"
+     target="_blank"
+     rel="noopener noreferrer">
+    Found here
+  </a>
+  </div>
+```
