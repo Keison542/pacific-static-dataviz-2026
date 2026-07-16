@@ -1,4 +1,3 @@
-
 ---
 format:
   html:
@@ -8,6 +7,7 @@ format:
     fig-width: 10
     fig-height: 5.5
     
+google-analytics: G-DYRYX25RZQ
 execute:
   echo: false
   warning: false
@@ -298,7 +298,7 @@ h3 { font-size: 1.3rem; color: #1a5276; }
 
 ```{=html}
 <div class="hero">
-<p class="hero-byline">Pacific Dataviz Challenge 2026 &nbsp;·&nbsp; Climate Change Theme</p>
+<p class="hero-byline">Pacific Dataviz Challenge 2026 &nbsp;·&nbsp; Theme is Climate Change </p>
   <div class="hero-title">Papua New Guinea's Coast Is Being Lost to the Sea</div>
   <p class="hero-subtitle">Of all 21 Pacific Island nations, PNG records the fastest rate of sea level rise — and the trend shows no sign of slowing</p>
 </div>
@@ -333,9 +333,8 @@ ggplot(trend_ci,
   scale_x_continuous(expand = expansion(mult = c(0.05, 0.06))) +
   labs(
     title    = "Rate of sea level rise per country (1993–2023)",
-    subtitle = "mm/yr · Point = OLS estimate · Bars = 95% CI · Diamond = Papua New Guinea",
     x = "Trend (mm per year)", y = NULL, color = "Subregion",
-    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators"
+    caption  = "Fig 1: Sea level rise per country in the Pacific"
   ) +
   theme_essay() +
   theme(
@@ -384,46 +383,56 @@ df_smooth <- df_spag |>
   }) |>
   ungroup()
 
-# Get all country data for points (highlight PNG separately)
+#Defining point_data
 point_data <- df_spag |>
   mutate(
-    point_color = if_else(is_png, col_ocean, "#9fc5d8"),
-    point_size = if_else(is_png, 2.5, 0.8),
-    point_alpha = if_else(is_png, 0.9, 0.3)
+    point_color = if_else(is_png, col_ocean, "#d5e8f3"),
+    point_size = if_else(is_png, 3.5, 0.5),
+    point_alpha = if_else(is_png, 1.0, 0.2)
   )
 
-# Define colours for smoothed lines: PNG in ocean blue, others in muted teal
+# Define colours for smoothed lines: PNG in bold , others in very faint grey
 highlight_colours <- c(
   "Papua New Guinea" = col_ocean,
-  "Other nations" = "#9fc5d8"
+  "Other nations" = "#c5d5e0"
 )
 
 ggplot() +
-  # All smoothed lines (including PNG)
+  # PNG smoothed line - THICK and BOLD
   geom_line(
-    data = df_smooth,
-    aes(x = year, y = smooth, group = country, colour = highlight),
-    linewidth = 0.5, alpha = 0.6
+    data = df_smooth |> filter(is_png),
+    aes(x = year, y = smooth, colour = highlight),
+    linewidth = 1.8, alpha = 1.0
   ) +
-  # All data points (PNG bold, others faint)
+  # Other nations smoothed lines - THIN and FAINT
+  geom_line(
+    data = df_smooth |> filter(!is_png),
+    aes(x = year, y = smooth, group = country, colour = highlight),
+    linewidth = 0.3, alpha = 0.35
+  ) +
+  # PNG data points - LARGE and SOLID
   geom_point(
-    data = point_data,
+    data = point_data |> filter(is_png),
     aes(x = year, y = sea_level_anomaly_m),
-    color = point_data$point_color,
-    size = point_data$point_size,
-    alpha = point_data$point_alpha
+    color = col_ocean, size = 3.5, alpha = 1.0
+  ) +
+  # Other nations data points - TINY and FAINT
+  geom_point(
+    data = point_data |> filter(!is_png),
+    aes(x = year, y = sea_level_anomaly_m),
+    color = "#d5e8f3", size = 0.5, alpha = 0.2
   ) +
   # Reference line at zero
   geom_hline(yintercept = 0, linetype = "dotted",
              color = "#aac4d4", linewidth = 0.4) +
-  # PNG annotation
+  # PNG annotation - larger, bolder, more prominent
   annotate("text", x = 2019, y = 0.185,
            label = "Papua New Guinea\n(fastest rising)",
            color = col_ocean, fontface = "bold",
-           size = 3.2, hjust = 0, lineheight = 0.9) +
+           size = 4.5, hjust = 0, lineheight = 0.9) +
   annotate("text", x = 2020, y = -0.04,
-           label = "All other nations",
-           color = "#6ba3c0", size = 2.8, hjust = 0) +
+           label = "All other nations (faint)",
+           color = "#8d9db6", size = 2.6, hjust = 0, fontface = "italic") +
   # Axes
   scale_x_continuous(breaks = seq(1993, 2023, by = 5),
                      limits = c(1993, 2026)) +
@@ -434,9 +443,8 @@ ggplot() +
   ) +
   labs(
     title    = "Sea level anomaly: all 21 Pacific Island nations, 1993–2023",
-    subtitle = "All lines smoothed (loess) · PNG highlighted in blue · reference line = 1993 baseline",
     x = NULL, y = "Sea level anomaly (m)",
-    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators"
+    caption  = "Fig 2: Sea level rise compared against PNG"
   ) +
   theme_essay() +
   theme(
@@ -507,7 +515,6 @@ ggplot() +
   coord_fixed(xlim = c(115, 295), ylim = c(-42, 32)) +
   labs(
     title    = "Pacific Island sea level rise rates (1993–2023)",
-    subtitle = "Bubble size = annual rise rate (mm/yr) · Colour = subregion",
     color    = "Subregion", x = NULL, y = NULL
   ) +
   theme_essay() +
@@ -523,8 +530,7 @@ ggplot() +
   )
 ```
 
-<p class="chart-note">Source: SPC Pacific Data Hub · Map: Pacific-centred projection</p>
-
+<p class="chart-note">Fig 3: Map of the Pacific island countries by sub region</p>
 
 ## Subregion comparison
 
@@ -640,9 +646,8 @@ if (!is.null(oni_annual)) {
              fontface = "bold", hjust = 0, size = 3.0) +
     labs(
       title   = "El Niño suppresses sea levels — but the trend keeps climbing",
-      subtitle = "Sea level (blue, left axis) vs. ONI (red dashed, right axis) · Shaded = major El Niño events",
       x = NULL,
-      caption = "Sea level: SPC Pacific Data Hub · ONI: NOAA Climate Prediction Center"
+      caption = "Fig 4: Sea level (blue) vs ONI(red), showing whether El Niño has suppressed sea levels or not. Note that ONI from NOAA Climate Prediction Center"
     ) +
     theme_essay() +
     theme(
@@ -704,7 +709,7 @@ ggplot(oni_coefs,
     subtitle = "Additional R² gained by adding the ONI to a trend-only model",
     x = "Increase in R² from adding ENSO (ONI)",
     y = NULL, fill = "Subregion",
-    caption  = "ONI source: NOAA Climate Prediction Center"
+    caption  = "Fig 5: ENSO sensitivity varies dramatically across the Pacific. ONI source: NOAA Climate Prediction Center"
   ) +
   theme_essay() +
   theme(
@@ -754,9 +759,8 @@ surf_temp |>
   scale_y_continuous(expand = expansion(mult = c(0.05, 0.08))) +
   labs(
     title    = "Mean surface temperature anomaly by subregion",
-    subtitle = "Positive values = above baseline · dashed line = overall warming trend",
     x = NULL, y = "Temperature anomaly (°C)", color = "Subregion",
-    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators (ST_ANOM)"
+    caption  = "Fig 6: Mean surface temperature across the Pacific. Data Source: SPC Pacific Data Hub — Climate Change Indicators (ST_ANOM)"
   ) +
   theme_essay() +
   theme(
@@ -795,9 +799,8 @@ sst_anom1 |>
   scale_y_continuous(expand = expansion(mult = c(0.05, 0.08))) +
   labs(
     title    = "Mean sea surface temperature (SST) anomaly by subregion",
-    subtitle = "Warmer oceans intensify storms and bleach coral reefs",
     x = NULL, y = "SST anomaly (°C)", color = "Subregion",
-    caption  = "Source: SPC Pacific Data Hub — Climate Change Indicators (SST_ANOM)"
+    caption  = "Fig 7: Mean sea surface ermparetaure across the Pacific. Source: SPC Pacific Data Hub — Climate Change Indicators (SST_ANOM)"
   ) +
   theme_essay() +
   theme(
@@ -823,19 +826,27 @@ Climate change translates into economic losses and human displacement through di
 
 ```{r}
 #| label: economic-loss
-#| fig-height: 4.5
+#| fig-height: 5
 
 econ_loss |>
   summarise(total_loss = sum(loss_usd, na.rm = TRUE), .by = year) |>
   arrange(year) |>
   ggplot(aes(x = year, y = total_loss / 1e6)) +
   geom_col(fill = col_coral, alpha = 0.7, width = 0.7) +
+  # Value labels on top of each bar
+  geom_text(
+    aes(label = paste0("$", round(total_loss / 1e6, 1), "M")),
+    vjust = -0.5,
+    size = 2.8,
+    color = "#4a5568",
+    fontface = "bold"
+  ) +
   geom_smooth(method = "loess", se = FALSE,
               color = col_ocean, linewidth = 0.8,
               linetype = "dashed", span = 0.5) +
   scale_y_continuous(
     labels = label_dollar(suffix = "M", prefix = "$"),
-    expand = expansion(mult = c(0.05, 0.10))
+    expand = expansion(mult = c(0.15, 0.10))  # Increased top margin for labels
   ) +
   scale_x_continuous(
     breaks = seq(min(econ_loss$year, na.rm = TRUE),
@@ -844,12 +855,8 @@ econ_loss |>
   ) +
   labs(
     title    = "Direct disaster economic losses across Pacific nations",
-    subtitle = paste0(
-      "Annual total · dashed = smoothed trend · cumulative total: $",
-      total_loss_bn, "B USD"
-    ),
     x = NULL, y = "Economic loss (USD millions)",
-    caption  = "Source: SPC Pacific Data Hub — SDG 11.5.2 (Direct disaster economic loss)"
+    caption  = "Fig 8: Economic Loss (US$) incurred to the Pacific island countries by natural disaster.  Source: SPC Pacific Data Hub — SDG 11.5.2 (Direct disaster economic loss)"
   ) +
   theme_essay() +
   theme(
@@ -863,7 +870,7 @@ econ_loss |>
 
 ```{r}
 #| label: persons-affected
-#| fig-height: 5.5
+#| fig-height: 6
 
 persons_aff |>
   summarise(total_persons = sum(persons, na.rm = TRUE),
@@ -874,20 +881,24 @@ persons_aff |>
              y = reorder(country, total_persons),
              fill = subregion)) +
   geom_col(alpha = 0.75, width = 0.7) +
+  # Value labels at the end of each bar
+  geom_text(
+    aes(label = paste0(round(total_persons / 1e3, 1), "K")),
+    hjust = -0.15,
+    size = 3.2,
+    color = "#4a5568",
+    fontface = "bold"
+  ) +
   scale_fill_manual(values = subregion_colours) +
   scale_x_continuous(
     labels = label_comma(suffix = "K"),
-    expand = expansion(mult = c(0.01, 0.08))
+    expand = expansion(mult = c(0.01, 0.15))  # Increased right margin for labels
   ) +
   labs(
     title    = "People directly affected by disasters (cumulative total)",
-    subtitle = paste0(
-      "Top 15 countries · region total: ",
-      total_persons_m, "M people across all records"
-    ),
     x = "Total persons affected (thousands)",
     y = NULL, fill = "Subregion",
-    caption  = "Source: SPC Pacific Data Hub — SDG 11.5.2 (Persons affected by disasters)"
+    caption  = "Fig 9: Number of people affected by natural disasters. Source: SPC Pacific Data Hub — SDG 11.5.2 (Persons affected by disasters)"
   ) +
   theme_essay() +
   theme(
@@ -993,7 +1004,7 @@ Across every dataset examined here, Papua New Guinea's position is consistent: h
 
   Direct disaster economic loss (VC_DSR_AALT):
   <a href="https://stats.pacificdata.org/vis?lc=en&df[ds]=ds%3ASPC2&df[id]=DF_SDG_11&df[ag]=SPC&df[vs]=3.0&dq=A.VC_DSR_AALT...._T.....&pd=,&to[TIME_PERIOD]=false" target="_blank">
-  SPC Pacific Data Hub – SDG 11.5.2
+  SPC Pacific Data Hub – SDG 11.5.
   </a>.<br>
 
   Persons directly affected by disasters (VC_DSR_AFFCT):
@@ -1018,12 +1029,12 @@ Across every dataset examined here, Papua New Guinea's position is consistent: h
      target="_blank"
      rel="noopener noreferrer">
     Keison Tipiou
-  </a> and its Quarto source can be 
+  </a> and its quarto source code can be found
 
   <a href="https://github.com/Keison542/pacific-static-dataviz-2026"
      target="_blank"
      rel="noopener noreferrer">
-    Found here
+    here
   </a>
   </div>
 ```
