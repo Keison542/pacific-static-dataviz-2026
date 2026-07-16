@@ -7,7 +7,6 @@ format:
     fig-width: 10
     fig-height: 5.5
     
-google-analytics: G-DYRYX25RZQ
 execute:
   echo: false
   warning: false
@@ -706,10 +705,9 @@ ggplot(oni_coefs,
   ) +
   labs(
     title    = "ENSO sensitivity varies dramatically across the Pacific",
-    subtitle = "Additional R² gained by adding the ONI to a trend-only model",
-    x = "Increase in R² from adding ENSO (ONI)",
+    x = "% increase in model R² after adding ENSO (ONI)",
     y = NULL, fill = "Subregion",
-    caption  = "Fig 5: ENSO sensitivity varies dramatically across the Pacific. ONI source: NOAA Climate Prediction Center"
+    caption  = "Fig 5: This chart shows how much adding ENSO (El Niño and La Niña) improved the sea-level model(linear) for each Pacific Island country. Higher percentages mean that ENSO plays a bigger role in explaining sea-level changes in that country. ONI source: NOAA Climate Prediction Center"
   ) +
   theme_essay() +
   theme(
@@ -722,7 +720,7 @@ ggplot(oni_coefs,
   )
 ```
 
-<p class="chart-note">PNG sits in the middle of this chart — its sea level record is influenced by ENSO, but the trend explains the bulk of its variance. Western Micronesian nations (Palau, Guam, FSM) show 40–50% additional variance explained by ONI; most Polynesian nations under 5%. For PNG, the long-term rise is the dominant signal.</p>
+<p class="chart-note">PNG lies near the middle of the ranking. Adding ENSO improves the linear model, but the long-term sea-level rise remains the dominant signal. Western Micronesia (Palau, Guam, FSM) shows the strongest ENSO influence (40–50% improvement), whereas most Polynesian countries show little additional improvement (<5%).</p>
 
 <div class="wave-divider">~ ~ ~</div>
 
