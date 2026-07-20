@@ -101,7 +101,7 @@ The rendered report includes:
 - Complete statistical output and interpretations
 - Source citations and methodology notes
 
-**View the full report**: [PNG_Coast_Lost_to_the_Sea.pdf](docs/PNG_Coast_Lost_to_the_Sea.pdf)
+**View the full report**: https://www.ktdatanalytics.com/pacific_rising.html
 
 ## 🎨 Design Notes
 
